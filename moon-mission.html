@@ -633,8 +633,12 @@ function drawSmoke(cam){
   ctx.globalAlpha=1;
 }
 function puff(x,y,vx,vy,r){if(S.smoke.length<320)S.smoke.push({x,y,vx,vy,r,a:.85});}
-function drawAltMeter(km){
+function drawAltMeter(km,alpha=1){
+  if(alpha<=0)return;
   const x=70,top=150,bot=760,yk=k=>bot-clamp(k,0,200)/200*(bot-top);
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.fillStyle='rgba(13,24,52,.86)';ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=3;
+  ctx.beginPath();if(ctx.roundRect)ctx.roundRect(28,58,250,730,22);else ctx.rect(28,58,250,730);ctx.fill();ctx.stroke();
   const layers=[[0,12,'對流層','#8fd3f4'],[12,50,'平流層','#5a9de0'],[50,85,'中氣層','#2c4f9a'],[85,200,'增溫層','#121c48']];
   ctx.lineWidth=3;ctx.strokeStyle=INK;
   for(const [a,b,n,c] of layers){
@@ -649,6 +653,7 @@ function drawAltMeter(km){
   ctx.fillStyle='#ff5a1f';ctx.strokeStyle=INK;P([[x-6,my],[x-28,my-12],[x-28,my+12]]);ctx.fill();ctx.stroke();
   ctx.font=`bold 34px ${FONT}`;ctx.textAlign='left';ctx.fillStyle='#fff';ctx.strokeStyle=INK;ctx.lineWidth=6;
   const t=`高度 ${Math.round(km)} 公里`;ctx.strokeText(t,x-10,top-48);ctx.fillText(t,x-10,top-48);
+  ctx.restore();
 }
 
 // ---------- hint ring ----------
@@ -921,7 +926,7 @@ function drawPadScene(){
     const a=clamp(1-S.km/75,0,1);ctx.globalAlpha=a;
     for(const s of S.streaks){ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x,s.y+s.len);ctx.stroke();}
     ctx.globalAlpha=1;
-    drawAltMeter(S.km);
+    drawAltMeter(S.km,clamp((S.t-1)/1.2,0,1));
   }
 }
 function drawEarthOrbit(){
