@@ -68,9 +68,10 @@ button:focus-visible{outline:4px solid var(--flame);outline-offset:3px}
     </div>
     <div class="finale" id="finale">
       <div class="card">
-        <h2>任務完成！</h2>
-        <p>兩位太空人在月球上留下腳印和旗子。<br>月球沒有風，這些腳印可以保留很久很久。</p>
-        <button class="primary" id="again">再玩一次</button>
+        <h2 id="finTitle">任務完成！</h2>
+        <p id="finText">兩位太空人在月球上留下腳印和旗子。<br>月球沒有風，這些腳印可以保留很久很久。</p>
+        <button class="primary" id="goHome">返回地球</button>
+        <button id="again">再玩一次</button>
       </div>
     </div>
   </div>
@@ -166,7 +167,8 @@ const sfx={
   beep(){tone(880,.14,'square',.08);},
   thud(){tone(110,.5,'sine',.35,0,40);},
   chime(){[523,659,784,1047].forEach((f,i)=>tone(f,.5,'triangle',.14,i*.14));},
-  click(){tone(660,.08,'triangle',.12);}
+  click(){tone(660,.08,'triangle',.12);},
+  splash(){if(!ac||!soundOn)return;const s=ac.createBufferSource();s.buffer=noiseBuf;const f=ac.createBiquadFilter();f.type='bandpass';f.frequency.value=900;const g=ac.createGain();const t=ac.currentTime;g.gain.setValueAtTime(.9,t);g.gain.exponentialRampToValueAtTime(.001,t+1.2);s.connect(f).connect(g).connect(ac.destination);s.start(t);s.stop(t+1.3);tone(140,.4,'sine',.3,0,60);}
 };
 let rumbleTarget=0;
 function updateRumble(){if(rumbleGain)rumbleGain.gain.setTargetAtTime(soundOn?rumbleTarget:0,ac.currentTime,.25);}
@@ -184,13 +186,13 @@ function say(text){
 function cap(text,speak=true){capEl.textContent=text;if(speak)say(text);}
 
 // ---------- steps ----------
-const STEP_NAMES=['坐進火箭','倒數','升空','地球軌道','飛向月球','月球軌道','降落月球','月球漫步'];
-const STEP_OF={pad:0,countdown:1,launch:2,earthOrbit:3,transit:4,moonOrbit:5,undock:6,descent:6,landed:6,egress:7};
+const STEP_NAMES=['坐進火箭','倒數','升空','地球軌道','飛向月球','月球軌道','降落月球','月球漫步','返回地球','重返大氣層','濺落海面'];
+const STEP_OF={pad:0,countdown:1,launch:2,earthOrbit:3,transit:4,moonOrbit:5,undock:6,descent:6,landed:6,egress:7,lunarAscent:8,rendezvous:8,returnTransit:8,reentry:9,splashdown:10};
 STEP_NAMES.forEach(n=>{const li=document.createElement('li');li.textContent=n;stepsEl.appendChild(li);});
-function updateSteps(){const k=STEP_OF[S.phase];[...stepsEl.children].forEach((li,i)=>{li.className=i<k||S.finished?'done':i===k?'now':'';});}
+function updateSteps(){const k=STEP_OF[S.phase];[...stepsEl.children].forEach((li,i)=>{li.className=(i<k||i<=S.doneUpTo)?'done':i===k?'now':'';});}
 
 // ---------- state ----------
-const RS=1.2, RX=760, PADY=780, LT=23;
+const RS=1.1, RX=760, PADY=780, LT=23;
 const PART_Y={s1:[0,150],s2:[150,265],s3:[265,345],sla:[345,385],sm:[385,410],cm:[410,432],tower:[432,478]};
 const ASTRO=[{c:'#e0473c',name:'指令長'},{c:'#2f7fd8',name:'指揮艙駕駛員'},{c:'#2f9e6f',name:'登月艇駕駛員'}];
 const LMX=800,LMY=700,LS=1.3,FLAGX=1165;
@@ -213,7 +215,10 @@ const PART_INFO={
     cmp:'大約 8 層樓高。'},
   s1:{title:'第一節火箭',body:'第一節火箭是力氣最大的一節，負責把整枚火箭從地面抬起來。燃料用完後就脫離，掉進大海裡。',
     list:['高約 42 公尺，直徑約 10 公尺','5 具 F-1 引擎，燒煤油和液態氧','只燒大約 2 分半鐘，每秒燒掉超過 12 公噸燃料','脫離時高度大約 65 公里'],
-    cmp:'大約 14 層樓高；底部的寬度，差不多是一間教室的長度。'}
+    cmp:'大約 14 層樓高；底部的寬度，差不多是一間教室的長度。'},
+  vab:{title:'火箭組裝大樓',body:'火箭太高了，不能在發射台上組裝。工作人員先在這棟大樓裡，把各節火箭和太空船一節一節往上疊好，再整枚運到發射台。',
+    list:['高約 160 公尺，比火箭還高 50 公尺','是世界上體積最大的建築之一','大門高約 140 公尺，是世界上最高的門之一','火箭組好後，由巨大的履帶搬運車載到發射台，時速只有大約 1.6 公里，比人走路還慢'],
+    cmp:'大約 53 層樓高。真實的大樓離發射台大約 5 公里，畫面上把它放近一點，方便和火箭比高度。'}
 };
 let S,TIME=0;
 function reset(){
@@ -222,7 +227,7 @@ function reset(){
     allIn:0,armRetract:0,ign:0,cdLast:11,
     km:0,h:0,v:0,cam:0,lowSm:0,gap:0,parts:new Set(['s1','s2','s3','sla','sm','cm','tower']),
     debris:[],smoke:[],streaks:[],dust:[],footprints:[],fpTimer:[0,0],
-    erot:0,phi:0,R:1660,craftCfg:'stack3',u:0,drift:null,th:-Math.PI/2,lmFrom:null,lmY:-120,hatch:0,flagK:0};
+    erot:0,phi:0,R:1660,craftCfg:'stack3',u:0,drift:null,th:-Math.PI/2,lmFrom:null,lmY:-120,hatch:0,flagK:0,doneUpTo:-1,rise:0,esc:0,sparks:[],splash:[],retCfg:'csm',cy:-260,crot:.3,bags:0,collar:0,heli:1900};
   finaleEl.classList.remove('show');
   closePart();
   if('speechSynthesis' in window)speechSynthesis.cancel();
@@ -244,6 +249,11 @@ function enter(p){
     case 'descent':cap('登月艇慢慢降落，引擎往下噴，讓它不會掉太快。');rumbleTarget=.12;break;
     case 'landed':cap('降落成功！請點一點登月艇，讓太空人走出來。');break;
     case 'egress':cap('艙門打開了！');break;
+    case 'lunarAscent':cap('準備回家！兩位太空人走回登月艇，關上艙門。');S.rise=0;break;
+    case 'rendezvous':cap('登月艇的上半部飛回月球軌道，去找指揮艙。');S.esc=0;S.drift=null;break;
+    case 'returnTransit':cap('回家的路大約要 3 天。太空船沿著「8」字的另一半，繞回地球。');S.u=0;S.retCfg='csm';S.drift=null;break;
+    case 'reentry':cap('以每小時大約 4 萬公里的速度切入大氣層！角度要剛剛好：太陡會燒壞，太淺會彈回太空。');S.streaks=[];S.sparks=[];break;
+    case 'splashdown':cap('3 頂大降落傘撐開，太空艙慢慢往海面落下。');S.cy=-260;S.crot=.3;S.splash=[];S.bags=0;S.collar=0;S.heli=1900;rumbleTarget=0;break;
   }
 }
 
@@ -263,6 +273,7 @@ let LABEL_RECTS=[];
 const pcEl=document.getElementById('partcard');
 function partAt(p){
   for(const r of LABEL_RECTS)if(p.x>r.x&&p.x<r.x+r.w&&p.y>r.y&&p.y<r.y+r.h)return r.p;
+  if(p.x<VAB.x1&&p.y>VAB.base-160*PPM&&p.y<VAB.base)return 'vab';
   if(Math.abs(p.x-RX)<50&&p.y<PADY+15&&p.y>PADY-478*RS){
     const u=(PADY-p.y)/RS;
     for(const k in PART_Y){const [a,b]=PART_Y[k];if(u>=a&&u<b)return k==='sm'?'cm':k;}
@@ -317,6 +328,14 @@ bSound.onclick=()=>{ensureAudio();soundOn=!soundOn;bSound.setAttribute('aria-pre
 bVoice.onclick=()=>{voiceOn=!voiceOn;bVoice.setAttribute('aria-pressed',voiceOn);if(!voiceOn&&'speechSynthesis' in window)speechSynthesis.cancel();};
 document.getElementById('bReset').onclick=()=>{ensureAudio();reset();};
 document.getElementById('again').onclick=()=>{ensureAudio();reset();};
+const finTitle=document.getElementById('finTitle'),finText=document.getElementById('finText'),goHome=document.getElementById('goHome');
+function showFinale(kind){
+  const moon=kind==='moon';
+  finTitle.textContent=moon?'任務完成！':'歡迎回家！';
+  finText.innerHTML=moon?'兩位太空人在月球上留下腳印和旗子。<br>月球沒有風，這些腳印可以保留很久很久。':'太空艙安全濺落在海上。<br>三位太空人完成登月任務，平安回到地球！';
+  goHome.style.display=moon?'':'none';document.getElementById('again').className=moon?'':'primary';finaleEl.classList.add('show');
+}
+goHome.onclick=()=>{ensureAudio();finaleEl.classList.remove('show');setPhase('lunarAscent');};
 
 // ---------- drawing: rocket parts ----------
 function drawFlame(x,y,w,len,a=1){
@@ -386,15 +405,15 @@ function drawRocketFlame(x,y,k=1){
 function drawStack(x,y,ang,s,parts,o={}){
   let mn=1e9,mx=-1e9;for(const p of parts){mn=Math.min(mn,PART_Y[p][0]);mx=Math.max(mx,PART_Y[p][1]);}
   ctx.save();ctx.translate(x,y);ctx.rotate(ang+Math.PI/2);ctx.scale(s,s);ctx.translate(0,(mn+mx)/2);
-  if(o.flame)drawFlame(0,-mn,o.fw||30,o.flame);
+  if(o.flame)drawFlame(0,-mn+(o.bell?13:0),o.fw||30,o.flame);
   for(const p of parts){ctx.save();ctx.translate(0,-PART_Y[p][0]);drawPart(p,o);ctx.restore();}
   ctx.restore();
 }
-function drawCSMLM(x,y,ang,s){
+function drawCSMLM(x,y,ang,s,o={}){
   ctx.save();ctx.translate(x,y);ctx.rotate(ang+Math.PI/2);ctx.scale(s,s);ctx.translate(0,423);
   ctx.save();ctx.translate(0,-385);drawPart('sm',{bell:true});ctx.restore();
   ctx.save();ctx.translate(0,-410);drawPart('cm');ctx.restore();
-  ctx.save();ctx.translate(0,-432);ctx.scale(1,-1);drawLM(0,205*.13,.13);ctx.restore();
+  ctx.save();ctx.translate(0,-432);ctx.scale(1,-1);drawLM(0,205*.13,.13,o.ascentOnly?{part:'ascent'}:{});ctx.restore();
   ctx.restore();
 }
 
@@ -402,7 +421,11 @@ function drawCSMLM(x,y,ang,s){
 function drawLM(x,y,s,o={}){
   ctx.save();ctx.translate(x,y);ctx.scale(s,s);
   ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=INK;
-  if(o.plume)drawFlame(0,-44,34,o.plume,.9);
+  const DS=o.part!=='ascent',AS=o.part!=='descent';
+  if(o.plume&&DS)drawFlame(0,-44,34,o.plume,.9);
+  if(o.plume&&!DS)drawFlame(0,-120,26,o.plume,.95);
+  if(!DS){ctx.lineWidth=3;P([[-8,-131],[8,-131],[12,-120],[-12,-120]]);FS('#4a5263');}
+  if(DS){
   for(const sd of [-1,1]){
     ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(sd*58,-102);ctx.lineTo(sd*110,-10);ctx.moveTo(sd*58,-70);ctx.lineTo(sd*110,-10);ctx.stroke();
     ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(sd*112,-5,18,6,0,0,Math.PI*2);FS('#c9a24a');
@@ -418,6 +441,9 @@ function drawLM(x,y,s,o={}){
   ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-8,-124);ctx.lineTo(-8,-14);ctx.moveTo(8,-124);ctx.lineTo(8,-14);
   for(let yy=-116;yy<-14;yy+=12){ctx.moveTo(-8,yy);ctx.lineTo(8,yy);}ctx.stroke();
   ctx.lineWidth=3;R(-24,-133,48,7,'#9aa2ad');
+  }
+  if(AS){
+  ctx.lineWidth=3;
   P([[-56,-130],[56,-130],[64,-162],[46,-206],[-46,-206],[-64,-162]]);FS('#d3d8de');
   P([[-24,-206],[24,-206],[18,-224],[-18,-224]]);FS('#bfc5cd');
   P([[-40,-196],[-18,-196],[-20,-176],[-36,-180]]);FS(DARK);
@@ -428,6 +454,7 @@ function drawLM(x,y,s,o={}){
   R(-76,-178,12,16,'#bfc5cd');R(64,-178,12,16,'#bfc5cd');
   ctx.beginPath();ctx.moveTo(36,-206);ctx.lineTo(48,-238);ctx.stroke();
   circ(50,-244,9,'#e9eef3');
+  }
   ctx.restore();
 }
 
@@ -506,14 +533,44 @@ function drawCloud(x,y,w){
 function drawGround(cam){
   if(cam>1300)return;
   ctx.fillStyle='#4f9fd1';ctx.fillRect(-1000,700+cam,3600,45);
-  ctx.lineWidth=3;ctx.strokeStyle=INK;
-  R(110,560+cam,180,150,'#d5dae1');
-  ctx.fillStyle='#b8bfc9';ctx.fillRect(150,600+cam,30,110);ctx.fillRect(220,600+cam,30,110);
   const gg=ctx.createLinearGradient(0,740+cam,0,1100+cam);gg.addColorStop(0,'#e3cf98');gg.addColorStop(1,'#c4a66a');
   ctx.fillStyle=gg;ctx.fillRect(-1000,740+cam,3600,700);
   ctx.fillStyle='#d4c9b3';P([[700,790+cam],[820,790+cam],[980,1300+cam],[540,1300+cam]]);ctx.fill();
   ctx.fillStyle='#7aa356';
-  for(const [x,y,r] of [[60,770,26],[420,760,22],[1500,775,30],[1290,758,18],[1560,830,24]]){ctx.beginPath();ctx.ellipse(x,y+cam,r*1.6,r,0,0,Math.PI*2);ctx.fill();}
+  for(const [x,y,r] of [[420,760,22],[1500,775,30],[1290,758,18],[1560,830,24]]){ctx.beginPath();ctx.ellipse(x,y+cam,r*1.6,r,0,0,Math.PI*2);ctx.fill();}
+  drawVAB(cam);
+}
+const VAB={x0:-420,x1:280,base:775};
+function drawVAB(cam){
+  const {x0,x1}=VAB,base=VAB.base+cam,top=VAB.base-160*PPM+cam;
+  ctx.save();
+  if(S.selPart==='vab'){ctx.shadowColor='#ffb000';ctx.shadowBlur=34;}
+  ctx.lineWidth=3;ctx.strokeStyle=INK;R(x0,top,x1-x0,base-top,'#dde2e8');
+  ctx.restore();
+  ctx.strokeStyle='rgba(29,42,68,.16)';ctx.lineWidth=2;ctx.beginPath();
+  for(let x=x0+28;x<x1;x+=28){ctx.moveTo(x,top+24);ctx.lineTo(x,base);}ctx.stroke();
+  ctx.lineWidth=3;ctx.strokeStyle=INK;R(x0,top,x1-x0,24,'#c5ccd5');
+  const cx=x1-170,lw=46*PPM,uw=23*PPM,lh=35*PPM,dh=139*PPM;
+  P([[cx-lw/2,base],[cx-lw/2,base-lh],[cx-uw/2,base-lh],[cx-uw/2,base-dh],[cx+uw/2,base-dh],[cx+uw/2,base-lh],[cx+lw/2,base-lh],[cx+lw/2,base]]);FS('#b4bcc7');
+  ctx.strokeStyle='rgba(29,42,68,.35)';ctx.lineWidth=2;ctx.beginPath();
+  for(let y=base-26;y>base-dh;y-=26){const w=y>base-lh?lw:uw;ctx.moveTo(cx-w/2+3,y);ctx.lineTo(cx+w/2-3,y);}ctx.stroke();
+  // height dimension
+  const dx=x1+16;
+  ctx.strokeStyle=INK;ctx.fillStyle=INK;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(dx,top+2);ctx.lineTo(dx,base-2);ctx.stroke();
+  P([[dx,top],[dx-7,top+14],[dx+7,top+14]]);ctx.fill();P([[dx,base],[dx-7,base-14],[dx+7,base-14]]);ctx.fill();
+  ctx.save();ctx.translate(dx,(top+base)/2);ctx.rotate(-Math.PI/2);
+  ctx.font=`20px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  const tw=ctx.measureText('160 公尺').width+20;
+  ctx.fillStyle='rgba(255,255,255,.95)';ctx.beginPath();if(ctx.roundRect)ctx.roundRect(-tw/2,-15,tw,30,15);else ctx.rect(-tw/2,-15,tw,30);ctx.fill();ctx.stroke();
+  ctx.fillStyle=INK;ctx.fillText('160 公尺',0,1);ctx.restore();
+  // name tag
+  const ck=S.phase==='pad',sel=S.selPart==='vab';
+  ctx.font=`22px ${FONT}`;ctx.textAlign='left';ctx.textBaseline='middle';
+  const t='火箭組裝大樓',w=ctx.measureText(t).width+22+(ck?32:0),tx=x1-24-w,ty=top+64;
+  ctx.fillStyle=sel?'#ffb000':'rgba(255,255,255,.92)';ctx.strokeStyle=ck?'#ffb000':INK;ctx.lineWidth=3;
+  ctx.beginPath();if(ctx.roundRect)ctx.roundRect(tx,ty-17,w,34,17);else ctx.rect(tx,ty-17,w,34);ctx.fill();ctx.stroke();
+  if(ck){ctx.lineWidth=2;ctx.strokeStyle=INK;circ(tx+19,ty,11,sel?'#fff':'#ffb000');ctx.fillStyle=INK;ctx.font=`bold 17px ${FONT}`;ctx.textAlign='center';ctx.fillText('i',tx+19,ty+1);ctx.font=`22px ${FONT}`;ctx.textAlign='left';}
+  ctx.fillStyle=INK;ctx.fillText(t,tx+11+(ck?32:0),ty+1);
 }
 function drawMount(cam){
   if(cam>1300)return;
@@ -532,8 +589,8 @@ function drawTower(cam){
   ctx.lineWidth=3;ctx.strokeStyle=INK;R(838,top-16,120,16,'#c8452f');
   const k=1-S.armRetract*.85;
   for(const ay of [600,470,390]){R(x1-66*k,ay+cam,66*k,9,'#9aa2ad');}
-  R(x1-78*k,285+cam,78*k,9,'#b0b6bf');
-  if(k>.5)R(x1-80*k,258+cam,24,28,WHITE);
+  R(x1-78*k,318+cam,78*k,9,'#b0b6bf');
+  if(k>.5)R(x1-80*k,291+cam,24,28,WHITE);
   ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(RULX,base);ctx.lineTo(RULX,base-120*PPM);ctx.stroke();
   ctx.font=`18px ${FONT}`;ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle=INK;
   for(let m=0;m<=120;m+=10){const y=base-m*PPM,mj=m%20===0;ctx.lineWidth=mj?3:2;ctx.beginPath();ctx.moveTo(RULX,y);ctx.lineTo(RULX+(mj?18:10),y);ctx.stroke();if(mj)ctx.fillText(String(m),RULX+24,y);}
@@ -612,8 +669,8 @@ function hint(x,y,r){
 function updateAstro(a,dt){
   a.t+=dt;
   if(a.state==='walk'){const d=2.4,k=ease(a.t/d);a.x=lerp(a.x0,882,k);a.y=lerp(840,780,k);a.s=lerp(1,.2,k);a.walk+=dt*9;if(a.t>=d){a.state='lift';a.t=0;}}
-  else if(a.state==='lift'){const d=2.2,k=ease(a.t/d);a.x=882;a.y=lerp(780,285,k);if(a.t>=d){a.state='arm';a.t=0;}}
-  else if(a.state==='arm'){const d=1.3,k=clamp(a.t/d,0,1);a.x=lerp(882,784,k);a.y=285;a.walk+=dt*9;a.alpha=k>.7?1-(k-.7)/.3:1;if(a.t>=d){a.state='in';a.alpha=0;}}
+  else if(a.state==='lift'){const d=2.2,k=ease(a.t/d);a.x=882;a.y=lerp(780,318,k);if(a.t>=d){a.state='arm';a.t=0;}}
+  else if(a.state==='arm'){const d=1.3,k=clamp(a.t/d,0,1);a.x=lerp(882,784,k);a.y=318;a.walk+=dt*9;a.alpha=k>.7?1-(k-.7)/.3:1;if(a.t>=d){a.state='in';a.alpha=0;}}
 }
 function separate(name,msg,gap=true){
   S.parts.delete(name);
@@ -716,14 +773,84 @@ function update(dt){
       if(t>=7.6)once('grav',()=>cap('月球的重力只有地球的六分之一，走起路來輕飄飄的。'));
       if(t>=9.2)once('flag',()=>cap('插上旗子，留下紀念！'));
       if(t>=10.8)once('b',()=>cap('登月艇駕駛員也踏上月球了！'));
-      if(t>=14.8)once('fin',()=>{S.finished=true;updateSteps();sfx.chime();cap('任務完成！月球沒有風，這些腳印可以保留很久很久。');finaleEl.classList.add('show');});
+      if(t>=14.8)once('fin',()=>{S.finished=true;S.doneUpTo=7;updateSteps();sfx.chime();cap('任務完成！月球沒有風，這些腳印可以保留很久很久。');showFinale('moon');});
+      break;
+    case 'lunarAscent':{
+      S.hatch=t<2.8?1:clamp(1-(t-2.8)/.6,0,1);
+      if(t>=3.6){const u=t-3.6;S.rise=20*u+45*u*u;rumbleTarget=u<2?.2:0;
+        once('lift',()=>{sfx.thud();cap('上半部點火起飛！下半部留在月球上，當作發射台。');
+          for(let i=0;i<24;i++){const sd=Math.random()<.5?-1:1;S.dust.push({x:LMX+sd*rand(10,70),y:LMY-130*LS+rand(-6,6),vx:sd*rand(80,260),vy:rand(-40,30),r:rand(6,14),a:.6});}});}
+      if(t>=8.6)transitionTo('rendezvous');
+      break;}
+    case 'rendezvous':
+      S.th+=dt*.42;
+      if(t>=5)once('dock',()=>{sfx.click();cap('對接成功！兩位太空人爬回指揮艙，三個人又見面了。');});
+      if(t>=7.4)once('jet',()=>{const c=retCraftPos();S.drift={x:c.x,y:c.y-20,vx:-40,vy:-30,ang:0};cap('丟掉登月艇的上半部，它會留在太空中。');});
+      if(S.drift){S.drift.x+=S.drift.vx*dt;S.drift.y+=S.drift.vy*dt;}
+      if(t>=9.2){S.esc=t-9.2;once('tei',()=>cap('服務艙的主引擎點火，離開月球，飛回地球！'));}
+      if(t>=12.4)transitionTo('returnTransit');
+      break;
+    case 'returnTransit':
+      S.erot+=dt*.012;
+      S.u=ease(clamp(t/8.4,0,1));
+      if(t>=5)once('smsep',()=>{const q=bez(S.u,RB);S.retCfg='cm';S.drift={x:q.x+25,y:q.y-10,vx:30,vy:-24,ang:q.ang};sfx.click();
+        cap('快到地球了！丟掉服務艙，只剩指揮艙回家，隔熱盾轉到前面。');});
+      if(S.drift){S.drift.x+=S.drift.vx*dt;S.drift.y+=S.drift.vy*dt;S.drift.ang+=.5*dt;}
+      if(t>=9)transitionTo('reentry');
+      break;
+    case 'reentry':{
+      S.km=kf(RK,t);S.vel=kf(RV,t);
+      S.heat=t<1?t*.3:t<3?.3+.7*(t-1)/2:t<9?1:t<12?1-(t-9)/3:0;
+      S.char=clamp(t/9,0,1);
+      S.dk=t<17.4?clamp((t-14)/.6,0,1):Math.max(0,1-(t-17.4)/.5);
+      S.mk=clamp((t-17)/1.2,0,1);
+      rumbleTarget=S.heat*.5+(t>14&&t<14.6?.3:0);
+      const sp=Math.max(120,S.vel*.04);
+      if(S.km<95&&Math.random()<.9)S.streaks.push({x:rand(0,1600),y:960,len:clamp(sp*.12,10,160)});
+      for(const st of S.streaks)st.y-=sp*dt*1.4;
+      S.streaks=S.streaks.filter(st=>st.y>-200);
+      if(S.heat>.2)for(let i=0;i<4;i++)S.sparks.push({x:800+rand(-85,85),y:440+rand(-5,15),vx:rand(-60,60),vy:-rand(250,600),a:1});
+      for(const k of S.sparks){k.x+=k.vx*dt;k.y+=k.vy*dt;k.a-=dt*1.4;}
+      S.sparks=S.sparks.filter(k=>k.a>0);
+      if(t>=2.6)once('r1',()=>cap('空氣被擠壓得非常熱，隔熱盾外面高達大約 2800 度，太空艙變成一團火球！'));
+      if(t>=5.4)once('r2',()=>cap('火球周圍的帶電氣體擋住無線電，地面暫時收不到太空人的聲音。'));
+      if(t>=8.2)once('r3',()=>cap('太空艙劇烈搖晃，太空人被重重壓在座椅上，大約是平常體重的 6 到 7 倍。'));
+      if(t>=11.2)once('r4',()=>cap('速度變慢，火焰熄滅，通訊恢復了！隔熱盾燒得焦黑，但太空人很安全。'));
+      if(t>=14)once('r5',()=>{sfx.thud();cap('高度約 7 公里，打開 2 頂小的「減速傘」，讓太空艙穩定下來，先慢下來。');});
+      if(t>=17)once('r6',()=>{sfx.click();cap('高度約 3 公里，收起減速傘，打開 3 頂大降落傘！');});
+      if(t>=19.6)transitionTo('splashdown');
+      break;}
+    case 'splashdown':
+      if(t<5){S.cy=lerp(-260,655,t/5);S.crot=.3+Math.sin(TIME*1.5)*.04;}
+      else{
+        S.cy=655+Math.sin(TIME*1.6)*5;
+        once('splash',()=>{sfx.splash();cap('撲通！太空艙落進海裡，這叫做「濺落」。它不會彈跳，落水時速度大約每小時 35 公里。');
+          for(let i=0;i<70;i++)S.splash.push({x:800+rand(-90,90),y:640,vx:rand(-220,220),vy:-rand(150,520),r:rand(3,8),a:1});});
+        if(t>=7&&t<8.4)S.crot=lerp(.3,Math.PI-.35,ease((t-7)/1.4));
+        if(t>=7)once('flip',()=>cap('海浪一推，太空艙翻過來倒立了！'));
+        if(t>=8.6){S.bags=clamp((t-8.6)/1,0,1);once('bags',()=>cap('頂端的 3 顆氣球充氣，把太空艙翻正。'));}
+        if(t>=9.8&&t<11.4)S.crot=lerp(Math.PI-.35,.18,ease((t-9.8)/1.6));
+        if(t>=11.4)S.crot=.18+Math.sin(TIME*1.6)*.03;
+        if(t>=11){S.heli=lerp(1900,1150,easeOut((t-11)/4));}
+        if(t>=12)once('rec',()=>cap('直升機和蛙人趕到，幫太空艙套上浮圈，把三位太空人接上船。'));
+        if(t>=12.6)S.collar=clamp((t-12.6)/1,0,1);
+        if(t>=16.5)once('home',()=>{S.doneUpTo=10;updateSteps();sfx.chime();cap('歡迎回家！三位太空人平安回到地球，登月任務圓滿成功！');showFinale('home');});
+      }
+      for(const d of S.splash){d.x+=d.vx*dt;d.y+=d.vy*dt;d.vy+=700*dt;d.a-=dt*.8;}
+      S.splash=S.splash.filter(d=>d.a>0&&d.y<720);
       break;
   }
   updateRumble();
 }
+const RB=[[1330,440],[1000,560],[560,250],[372,585]];
+const RK=[[0,122],[3,90],[6,60],[10,32],[13,12],[14,7],[17,3],[19.6,2]];
+const RV=[[0,39600],[3,37000],[6,28000],[9,12000],[11,4000],[13,1200],[14,600],[16,300],[17,250],[18.5,60],[19.6,35]];
+const RCLOUDS=Array.from({length:16},()=>({x:rand(-100,1700),km:rand(2,9),w:rand(140,320)}));
+function kf(a,t){if(t<=a[0][0])return a[0][1];for(let i=1;i<a.length;i++)if(t<=a[i][0]){const p=a[i-1],q=a[i];return lerp(p[1],q[1],(t-p[0])/(q[0]-p[0]));}return a[a.length-1][1];}
+function retCraftPos(){const g=1+S.esc*S.esc*.35;return{x:800+360*g*Math.cos(S.th),y:450+330*g*Math.sin(S.th)};}
 const BZ=[[380,520],[640,830],[1130,40],[1290,300]];
-function bez(u){
-  const m=1-u,[a,b,c,d]=BZ;
+function bez(u,pts=BZ){
+  const m=1-u,[a,b,c,d]=pts;
   const x=m*m*m*a[0]+3*m*m*u*b[0]+3*m*u*u*c[0]+u*u*u*d[0];
   const y=m*m*m*a[1]+3*m*m*u*b[1]+3*m*u*u*c[1]+u*u*u*d[1];
   const dx=3*m*m*(b[0]-a[0])+6*m*u*(c[0]-b[0])+3*u*u*(d[0]-c[0]);
@@ -752,7 +879,7 @@ function drawPadScene(){
   const fk=S.phase==='countdown'?S.ign:S.phase==='launch'?1:0;
   drawRocketFlame(RX,ry,fk);
   drawRocket(RX,ry,RS,S.parts);
-  if(S.selPart&&S.phase==='pad'){
+  if(S.selPart&&S.selPart!=='vab'&&S.phase==='pad'){
     ctx.save();ctx.translate(RX,ry);ctx.scale(RS,RS);ctx.shadowColor='#ffb000';ctx.shadowBlur=26;
     for(const q of (S.selPart==='cm'?['sm','cm']:[S.selPart])){ctx.save();ctx.translate(0,-PART_Y[q][0]);drawPart(q);ctx.restore();}
     ctx.restore();
@@ -862,10 +989,19 @@ function drawSurface(){
     }
   }
   const lmY=S.phase==='descent'?S.lmY:LMY;
-  drawLM(LMX,lmY,LS,{plume:S.phase==='descent'&&S.t<6.5?70:0,hatch:S.phase==='egress'?S.hatch:0});
+  if(S.phase==='lunarAscent'){
+    drawLM(LMX,LMY,LS,{part:'descent'});
+    drawLM(LMX,LMY-S.rise,LS,{part:'ascent',hatch:S.hatch,plume:S.t>=3.6?90:0});
+  }else drawLM(LMX,lmY,LS,{plume:S.phase==='descent'&&S.t<6.5?70:0,hatch:S.phase==='egress'?S.hatch:0});
   for(const p of S.dust){ctx.globalAlpha=clamp(p.a,0,1);ctx.fillStyle='#c2bfb6';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();}
   ctx.globalAlpha=1;
   if(S.phase==='landed'&&!S.leaving)hint(LMX,LMY-150,175);
+  if(S.phase==='lunarAscent'){
+    for(const g of EG){
+      const k=ease(S.t/2.4),x=lerp(g.target,LMX,k),y=lerp(LMY+24,LMY+4,k),al=1-clamp((S.t-2)/.6,0,1);
+      if(al>0)drawAstronaut(x,y-Math.abs(Math.sin(S.t*6))*8,.56,{color:ASTRO[g.i].c,walk:S.t*6,pose:'walk',flip:true,alpha:al});
+    }
+  }
   if(S.phase==='egress'){
     const list=EG.map(g=>({g,st:egressPose(S.t-g.start,g.target)})).filter(o=>o.st).sort((a,b)=>a.st.y-b.st.y);
     for(const {g,st} of list){
@@ -874,11 +1010,152 @@ function drawSurface(){
     }
   }
 }
+function mixHex(a,b,t){const A=[1,3,5].map(i=>parseInt(a.substr(i,2),16)),B=[1,3,5].map(i=>parseInt(b.substr(i,2),16));return rgb(A.map((v,i)=>lerp(v,B[i],clamp(t,0,1))));}
+function drawCapsule(x,y,rot,s,o={}){
+  const h=o.heat||0,ch=o.char||0;
+  ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.scale(s,s);
+  if(h>0){
+    for(let i=0;i<7;i++){
+      const sd=(i/6)*2-1,bx=sd*38,L=(120+Math.random()*100)*h;
+      const g=ctx.createLinearGradient(bx,0,bx*.5,-L);
+      g.addColorStop(0,`rgba(255,240,200,${.9*h})`);g.addColorStop(.3,`rgba(255,150,40,${.75*h})`);g.addColorStop(1,'rgba(255,60,20,0)');
+      ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(bx-12,4);ctx.quadraticCurveTo(bx*1.5,-L*.5,bx*.5+(Math.random()-.5)*24,-L);ctx.quadraticCurveTo(bx*.9,-L*.4,bx+12,4);ctx.closePath();ctx.fill();
+    }
+  }
+  ctx.lineWidth=3;ctx.strokeStyle=INK;ctx.lineJoin='round';
+  P([[-40,0],[40,0],[13,-58],[-13,-58]]);FS(mixHex('#ece9e2','#a99f93',ch));
+  R(-8,-66,16,8,'#cfd5dc');
+  ctx.fillStyle=DARK;P([[-24,-20],[-15,-20],[-13,-30],[-20,-30]]);ctx.fill();P([[24,-20],[15,-20],[13,-30],[20,-30]]);ctx.fill();
+  ctx.beginPath();ctx.moveTo(-42,0);ctx.quadraticCurveTo(0,15,42,0);ctx.lineTo(40,-3);ctx.lineTo(-40,-3);ctx.closePath();FS(mixHex('#a9825a','#2b2420',ch));
+  if(h>0){
+    const g=ctx.createRadialGradient(0,12,4,0,12,88);
+    g.addColorStop(0,`rgba(255,255,235,${h})`);g.addColorStop(.35,`rgba(255,190,80,${.85*h})`);g.addColorStop(1,'rgba(255,90,20,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(0,14,88,42,0,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+function canopy(ax,ay,cx,cy,r,striped,alpha=1){
+  if(r<=1)return;
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.strokeStyle='rgba(29,42,68,.55)';ctx.lineWidth=1.6;ctx.beginPath();
+  for(const f of [-1,-.5,0,.5,1]){ctx.moveTo(ax,ay);ctx.lineTo(cx+f*r,cy);}ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx-r,cy);ctx.quadraticCurveTo(cx-r,cy-r*1.05,cx,cy-r*1.05);ctx.quadraticCurveTo(cx+r,cy-r*1.05,cx+r,cy);
+  ctx.quadraticCurveTo(cx+r/2,cy-r*.2,cx,cy);ctx.quadraticCurveTo(cx-r/2,cy-r*.2,cx-r,cy);ctx.closePath();
+  ctx.save();ctx.clip();
+  ctx.fillStyle='#ffffff';ctx.fillRect(cx-r-2,cy-r*1.1,r*2+4,r*1.2);
+  ctx.fillStyle='#ff7a2f';
+  if(striped){for(let i=-3;i<=3;i+=2)ctx.fillRect(cx+i*r/4-r/8,cy-r*1.1,r/4,r*1.2);}
+  else ctx.fillRect(cx-r,cy-r*.6,r*2,r*.25);
+  ctx.restore();
+  ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();
+  ctx.restore();
+}
+function drawRendezvous(){
+  drawStars(1);drawEarth(1420,130,46,.3);
+  ctx.save();ctx.setLineDash([6,12]);ctx.lineWidth=3;ctx.strokeStyle='rgba(255,255,255,.3)';ctx.beginPath();ctx.ellipse(800,450,360,330,0,0,Math.PI*2);ctx.stroke();ctx.restore();
+  drawMoon(800,450,250);
+  const c=retCraftPos(),ang=Math.atan2(330*Math.cos(S.th),-360*Math.sin(S.th)),t=S.t;
+  if(t<5){
+    drawStack(c.x,c.y,ang,1.6,['sm','cm'],{bell:true});
+    const k=ease(t/5),f={x:800+250*Math.cos(.7),y:450+250*Math.sin(.7)};
+    const tx=c.x+Math.cos(ang)*70,ty=c.y+Math.sin(ang)*70;
+    const nx=-(ty-f.y),ny=tx-f.x,nl=Math.hypot(nx,ny)||1,arc=Math.sin(k*Math.PI)*70;
+    drawLM(lerp(f.x,tx,k)+nx/nl*arc,lerp(f.y,ty,k)+ny/nl*arc+20,.32,{part:'ascent',plume:t<4.4?40:0});
+  }else if(t<7.4)drawCSMLM(c.x,c.y,ang,1.6,{ascentOnly:true});
+  else{
+    if(S.drift)drawLM(S.drift.x,S.drift.y+20,.32,{part:'ascent'});
+    drawStack(c.x,c.y,ang+(S.esc>0?-S.esc*.15:0),1.6,['sm','cm'],{bell:true,flame:S.esc>0?70:0,fw:26});
+  }
+}
+function drawReturn(){
+  drawStars(1);
+  ctx.save();ctx.setLineDash([4,12]);ctx.lineWidth=3;ctx.strokeStyle='rgba(255,255,255,.18)';
+  ctx.beginPath();ctx.moveTo(...BZ[0]);ctx.bezierCurveTo(...BZ[1],...BZ[2],...BZ[3]);ctx.bezierCurveTo(1480,160,1540,520,1330,440);ctx.stroke();
+  ctx.strokeStyle='rgba(255,176,0,.65)';ctx.beginPath();ctx.moveTo(...RB[0]);ctx.bezierCurveTo(...RB[1],...RB[2],...RB[3]);ctx.stroke();
+  ctx.restore();
+  drawEarth(230,560,125,S.erot);drawMoon(1380,370,72);
+  if(S.drift)drawStack(S.drift.x,S.drift.y,S.drift.ang,1.1,['sm'],{bell:true});
+  const q=bez(S.u,RB);
+  if(S.retCfg==='csm')drawStack(q.x,q.y,q.ang,1.1,['sm','cm'],{bell:true});
+  else drawCapsule(q.x,q.y,q.ang-Math.PI/2,.42,{});
+}
+function drawReentry(){
+  const km=S.km,t=S.t;
+  drawStars(clamp((km-40)/50,0,1));
+  for(const c of RCLOUDS){const y=470-(c.km-km)*95;if(y<-200||y>1100)continue;drawCloud(c.x,y,c.w);}
+  ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=2;
+  for(const st of S.streaks){ctx.beginPath();ctx.moveTo(st.x,st.y);ctx.lineTo(st.x,st.y+st.len);ctx.stroke();}
+  const amp=S.heat*11+(t>14&&t<14.7?7:0)+(t>17&&t<17.8?5:0);
+  const jx=(Math.random()-.5)*amp,jy=(Math.random()-.5)*amp,jr=(Math.random()-.5)*S.heat*.08;
+  const cyy=lerp(440,600,ease(S.mk)),rot=.32+jr+Math.sin(TIME*2)*.03*(1-S.heat);
+  const cx=800+jx,cy=cyy+jy,s=2.1;
+  const ax=cx+Math.sin(rot)*66*s,ay=cy-Math.cos(rot)*66*s;
+  if(S.dk>0){const sw=Math.sin(TIME*3)*10;canopy(ax,ay,ax-45+sw,ay-170,30*S.dk,false,clamp(S.dk,0,1));canopy(ax,ay,ax+45+sw,ay-170,30*S.dk,false,clamp(S.dk,0,1));}
+  if(S.mk>0){const sw=Math.sin(TIME*1.4)*8,r=105*S.mk;for(const f of [-1,0,1])canopy(ax,ay,ax+f*r*1.75+sw,ay-120-150*S.mk+(f?20:0),r,true);}
+  for(const k of S.sparks){ctx.globalAlpha=clamp(k.a,0,1);ctx.fillStyle='#ffb000';ctx.beginPath();ctx.arc(k.x+jx,k.y+jy+(cyy-440),3,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha=1;
+  drawCapsule(cx,cy,rot,s,{heat:S.heat,char:S.char});
+  drawAltMeter(km);
+  const panel=(y,label,val,warn)=>{ctx.font=`22px ${FONT}`;ctx.textAlign='left';ctx.textBaseline='middle';
+    const tx=`${label}：${val}`,w=ctx.measureText(tx).width+30;
+    ctx.fillStyle=warn?'#e0473c':'rgba(255,255,255,.92)';ctx.strokeStyle=INK;ctx.lineWidth=3;
+    ctx.beginPath();if(ctx.roundRect)ctx.roundRect(1560-w,y-20,w,40,20);else ctx.rect(1560-w,y-20,w,40);ctx.fill();ctx.stroke();
+    ctx.fillStyle=warn?'#fff':INK;ctx.fillText(tx,1560-w+15,y+1);};
+  panel(150,'速度',`每小時 ${Math.round(S.vel).toLocaleString()} 公里`);
+  panel(205,'隔熱盾外溫度',S.heat>.03?`約 ${Math.round(S.heat*2800/100)*100} 度`:'正常');
+  const black=t>=5.2&&t<11.2;
+  panel(260,'通訊',black?'中斷':'正常',black&&Math.sin(TIME*8)>-.3);
+}
+function drawSplash(){
+  const t=S.t;
+  for(const c of CLOUDS.slice(0,6)){drawCloud(c.x,80+(c.h%200),c.w*.8);}
+  ctx.lineWidth=3;ctx.strokeStyle=INK;
+  P([[230,548],[520,548],[500,566],[250,566]]);FS('#7d8794');
+  R(380,520,60,28,'#9aa2ad');R(400,500,20,20,'#9aa2ad');
+  const og=ctx.createLinearGradient(0,560,0,900);og.addColorStop(0,'#3b8fcf');og.addColorStop(1,'#1d5a96');
+  ctx.fillStyle=og;ctx.fillRect(-500,560,2600,500);
+  const waves=()=>{ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=2;ctx.beginPath();
+  for(let r=0;r<6;r++){const y=600+r*55,off=(TIME*30+r*70)%160;for(let x=-160+off;x<1700;x+=160){ctx.moveTo(x,y);ctx.quadraticCurveTo(x+20,y-6,x+40,y);}}
+  ctx.stroke();};
+  waves();
+  const s=1.25,rot=S.crot,ax=800+Math.sin(rot)*66*s,ay=S.cy-Math.cos(rot)*66*s;
+  if(t<5.3){const sw=Math.sin(TIME*1.4)*6;for(const f of [-1,0,1])canopy(ax,ay,ax+f*120+sw,ay-200+(f?16:0),68,true);}
+  else{
+    const k=clamp((t-5.3)/2.2,0,1);
+    for(const f of [-1,0,1]){
+      const cx=800+f*150+k*f*60+120*k,cy=lerp(ay-200,618,k);
+      ctx.save();ctx.translate(cx,cy);ctx.scale(1,1-k*.82);canopy(0,200,0,0,68*(1-k*.1),true,1-k*.35);ctx.restore();
+    }
+  }
+  drawCapsule(800,S.cy,rot,s,{char:1});
+  if(S.cy>540){
+    const wl=S.cy-16;
+    ctx.fillStyle=og;ctx.beginPath();ctx.moveTo(640,wl);
+    for(let x=640;x<=960;x+=20)ctx.lineTo(x,wl+Math.sin(x*.05+TIME*3)*3);
+    ctx.lineTo(960,wl+140);ctx.lineTo(640,wl+140);ctx.closePath();ctx.fill();
+    ctx.save();ctx.beginPath();ctx.rect(640,wl+6,320,140);ctx.clip();waves();ctx.restore();
+    ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(800,wl+2,95,8,0,0,Math.PI*2);ctx.stroke();
+  }
+  if(S.bags>0){ctx.lineWidth=2.5;ctx.strokeStyle=INK;for(const f of [-1,0,1])circ(800+f*26,S.cy-18-Math.abs(f)*2,16*S.bags,'#f7f5ef');}
+  if(S.collar>0){ctx.save();ctx.globalAlpha=S.collar;ctx.strokeStyle='#ff7a2f';ctx.lineWidth=14;ctx.beginPath();ctx.ellipse(800,S.cy-16,64,13,0,0,Math.PI*2);ctx.stroke();ctx.restore();}
+  for(const d of S.splash){ctx.globalAlpha=clamp(d.a,0,1);ctx.fillStyle='#e8f6ff';ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha=1;
+  if(S.heli<1850){
+    const x=S.heli,y=230+Math.sin(TIME*2)*6;
+    ctx.save();ctx.translate(x,y);ctx.lineWidth=3;ctx.strokeStyle=INK;
+    P([[40,-8],[160,-14],[160,-2],[40,10]]);FS('#9aa6b4');R(154,-36,10,36,'#9aa6b4');
+    ctx.beginPath();ctx.ellipse(0,0,64,32,0,0,Math.PI*2);FS('#c5ccd5');
+    ctx.beginPath();ctx.ellipse(-30,-6,22,15,0,0,Math.PI*2);FS('#7fb4e0');
+    ctx.beginPath();ctx.moveTo(-44,44);ctx.lineTo(44,44);ctx.moveTo(-26,30);ctx.lineTo(-30,44);ctx.moveTo(26,30);ctx.lineTo(30,44);ctx.moveTo(0,-32);ctx.lineTo(0,-44);ctx.stroke();
+    const bw=140*Math.abs(Math.cos(TIME*22));ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-bw,-44);ctx.lineTo(bw,-44);ctx.stroke();
+    ctx.restore();
+  }
+}
 function draw(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   const ground=S.phase==='pad'||S.phase==='countdown'||S.phase==='launch';
-  if(ground){
-    const km=S.phase==='launch'?S.km:0;
+  if(ground||S.phase==='reentry'||S.phase==='splashdown'){
+    const km=(S.phase==='launch'||S.phase==='reentry')?S.km:0;
     const g=ctx.createLinearGradient(0,0,0,ch);g.addColorStop(0,rgb(sky(km+18)));g.addColorStop(1,rgb(sky(km)));
     ctx.fillStyle=g;
   }else ctx.fillStyle='#03060f';
@@ -888,6 +1165,10 @@ function draw(){
   else if(S.phase==='earthOrbit')drawEarthOrbit();
   else if(S.phase==='transit')drawTransit();
   else if(S.phase==='moonOrbit'||S.phase==='undock')drawMoonOrbit();
+  else if(S.phase==='rendezvous')drawRendezvous();
+  else if(S.phase==='returnTransit')drawReturn();
+  else if(S.phase==='reentry')drawReentry();
+  else if(S.phase==='splashdown')drawSplash();
   else drawSurface();
   ctx.setTransform(dpr,0,0,dpr,0,0);
   const fa=Math.max(S.leaving?S.leaving.t/.7:0,S.fadeIn);
